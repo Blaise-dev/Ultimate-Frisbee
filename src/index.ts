@@ -20,7 +20,7 @@ import profileRoutes from './routes/profileRoutes';
 const app: Application = express();
 
 // Middleware
-app.use(cors({ origin: config.cors.origin }));
+app.use(cors({ origin: config.cors.origins }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
