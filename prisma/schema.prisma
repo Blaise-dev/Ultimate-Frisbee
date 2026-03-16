@@ -1,0 +1,237 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Énumération des rôles utilisateurs
+enum UserRole {
+  ADMIN
+  COACH
+  ATHLETE
+}
+
+// Énumération des catégories d'athlètes
+enum AthleteCategory {
+  JUNIOR
+  SENIOR
+  VETERAN
+}
+
+// Énumération des niveaux
+enum AthleteLevel {
+  BEGINNER
+  INTERMEDIATE
+  ADVANCED
+  EXPERT
+}
+
+// Énumération des types de groupes
+enum GroupType {
+  TRAINING      // Entraînement
+  COMPETITION   // Compétition
+  LEISURE       // Loisir
+}
+
+// Énumération des types de séances
+enum SessionType {
+  TRAINING      // Entraînement
+  MATCH         // Match/Compétition
+}
+
+// Modèle Sport (pour extensibilité multi-sport)
+model Sport {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  description String?
+  themes      String[] // Thèmes d'activités disponibles pour ce sport (ex: ["THROWING", "CATCHING", "POSITIONING"])
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  groups   Group[]
+  sessions Session[]
+
+  @@map("sports")
+}
+
+// Modèle Utilisateur (pour l'authentification)
+model User {
+  id         String   @id @default(uuid())
+  email      String   @unique
+  password   String
+  role       UserRole
+  isBanned   Boolean  @default(false)
+  bannedAt   DateTime?
+  bannedBy   String?  // ID de l'admin qui a banni
+  isDeleted  Boolean  @default(false)
+  deletedAt  DateTime?
+  deletedBy  String?  // ID de l'admin qui a supprimé, ou l'utilisateur lui-même
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  // Relations
+  athlete Athlete?
+  coach   Coach?
+
+  @@map("users")
+}
+
+// Modèle Athlète
+model Athlete {
+  id             String           @id @default(uuid())
+  userId         String           @unique
+  firstName      String
+  lastName       String
+  category       AthleteCategory
+  level          AthleteLevel
+  profilePicture String?          // URL de la photo de profil
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  // Relations
+  user            User                     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  groups          AthleteGroup[]
+  sessions        AthleteSession[]
+  activityRecords ActivityPerformanceData[]
+
+  @@map("athletes")
+}
+
+// Modèle Coach
+model Coach {
+  id              String   @id @default(uuid())
+  userId          String   @unique
+  firstName       String
+  lastName        String
+  profilePicture  String?  // URL de la photo de profil
+  specialization  String?  // Spécialisation du coach
+  experienceYears Int?     // Années d'expérience
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  // Relations
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  groups   Group[]
+  sessions Session[]
+
+  @@map("coaches")
+}
+
+// Modèle Group
+model Group {
+  id          String    @id @default(uuid())
+  name        String
+  type        GroupType
+  description String?
+  coachId     String?
+  sportId     String?   // Sport pratiqué par ce groupe
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  // Relations
+  coach    Coach?         @relation(fields: [coachId], references: [id], onDelete: SetNull)
+  sport    Sport?         @relation(fields: [sportId], references: [id], onDelete: SetNull)
+  athletes AthleteGroup[]
+
+  @@map("groups")
+}
+
+// Table de liaison Athlète-Groupe (relation many-to-many)
+model AthleteGroup {
+  athleteId String
+  groupId   String
+  joinedAt  DateTime @default(now())
+
+  // Relations
+  athlete Athlete @relation(fields: [athleteId], references: [id], onDelete: Cascade)
+  group   Group   @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  @@id([athleteId, groupId])
+  @@map("athlete_groups")
+}
+
+// Modèle Séance (entraînement ou match)
+model Session {
+  id          String      @id @default(uuid())
+  title       String
+  type        SessionType
+  coachId     String
+  sportId     String?     // Sport concerné par cette séance
+  startTime   DateTime
+  endTime     DateTime
+  location    String?
+  description String?
+  imageUrl    String?     // URL de l'image de la séance
+  isRecurrent Boolean     @default(false)
+  recurrence  String?     // Règle de récurrence (ex: "weekly", "biweekly")
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  // Relations
+  coach      Coach            @relation(fields: [coachId], references: [id], onDelete: Cascade)
+  sport      Sport?           @relation(fields: [sportId], references: [id], onDelete: SetNull)
+  athletes   AthleteSession[]
+  activities Activity[]
+
+  @@map("sessions")
+}
+
+// Table de liaison Athlète-Séance (relation many-to-many)
+model AthleteSession {
+  athleteId String
+  sessionId String
+  status    String   @default("registered") // registered, attended, absent
+  joinedAt  DateTime @default(now())
+
+  // Relations
+  athlete Athlete @relation(fields: [athleteId], references: [id], onDelete: Cascade)
+  session Session @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@id([athleteId, sessionId])
+  @@map("athlete_sessions")
+}
+
+// Modèle Activité (activité sportive lors d'une séance)
+model Activity {
+  id          String   @id @default(uuid())
+  sessionId   String
+  name        String
+  theme       String   // Thème de l'activité (ex: "THROWING", "CATCHING", "POSITIONING")
+  description String?
+  duration    Int?     // Durée en minutes
+  order       Int      @default(0) // Ordre de l'activité dans la séance
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  session          Session                   @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  performanceData  ActivityPerformanceData[]
+
+  @@map("activities")
+}
+
+// Modèle pour les données de performance (extensible)
+model ActivityPerformanceData {
+  id         String   @id @default(uuid())
+  activityId String
+  athleteId  String
+  dataType   String   // Type de donnée: "score", "repetitions", "time", "distance", etc.
+  value      Float    // Valeur numérique
+  unit       String?  // Unité: "points", "reps", "seconds", "meters", etc.
+  notes      String?
+  createdAt  DateTime @default(now())
+
+  // Relations
+  activity Activity @relation(fields: [activityId], references: [id], onDelete: Cascade)
+  athlete  Athlete  @relation(fields: [athleteId], references: [id], onDelete: Cascade)
+
+  @@map("activity_performance_data")
+}
