@@ -1,8 +1,7 @@
 import { Request, Response } from 'express';
 import { SessionType } from '@prisma/client';
 import prisma from '../config/database';
-import path from 'path';
-import fs from 'fs';
+import { deleteCloudinaryImageByUrl, uploadImageBuffer } from '../services/cloudinary.service';
 
 const getDefaultSessionImageUrlByType = (type: string) =>
   `/uploads/sessions/default-${String(type || 'training').toLowerCase()}.svg`;
@@ -362,21 +361,15 @@ export const uploadSessionImage = async (req: Request, res: Response): Promise<v
     });
 
     if (!session) {
-      // Supprimer le fichier uploadé si la séance n'existe pas
-      fs.unlinkSync(file.path);
       res.status(404).json({ message: 'Séance non trouvée' });
       return;
     }
 
-    // URL de l'image
-    const imageUrl = `/uploads/sessions/${file.filename}`;
+    const uploaded = await uploadImageBuffer(file.buffer, 'ultimate-frisbee/sessions');
+    const imageUrl = uploaded.secureUrl;
 
-    // Supprimer l'ancienne image si elle existe
     if (session.imageUrl && !isDefaultSessionImage(session.imageUrl)) {
-      const oldImagePath = path.join(__dirname, '../../', session.imageUrl);
-      if (fs.existsSync(oldImagePath)) {
-        fs.unlinkSync(oldImagePath);
-      }
+      await deleteCloudinaryImageByUrl(session.imageUrl);
     }
 
     // Mettre à jour la base de données
@@ -400,6 +393,10 @@ export const uploadSessionImage = async (req: Request, res: Response): Promise<v
     });
   } catch (error) {
     console.error('Erreur lors de l\'upload de l\'image:', error);
+    if (error instanceof Error && error.message.includes('Cloudinary non configuré')) {
+      res.status(503).json({ message: error.message });
+      return;
+    }
     res.status(500).json({ message: 'Erreur serveur' });
   }
 };

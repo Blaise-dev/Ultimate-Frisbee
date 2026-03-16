@@ -1,8 +1,7 @@
 import { Response } from 'express';
 import prisma from '../config/database';
-import fs from 'fs';
-import path from 'path';
 import { AuthRequest } from '../middleware/auth';
+import { deleteCloudinaryImageByUrl, uploadImageBuffer } from '../services/cloudinary.service';
 
 // Mettre à jour le profil (nom, prénom)
 export const updateProfile = async (req: AuthRequest, res: Response): Promise<Response | void> => {
@@ -72,15 +71,14 @@ export const uploadPhoto = async (req: AuthRequest, res: Response): Promise<Resp
       return res.status(404).json({ message: 'Utilisateur non trouvé' });
     }
 
-    // URL de la photo
-    const photoUrl = `/uploads/profiles/${file.filename}`;
+    const uploaded = await uploadImageBuffer(file.buffer, 'ultimate-frisbee/profiles');
+    const photoUrl = uploaded.secureUrl;
 
-    // Supprimer l'ancienne photo si elle existe
-    let oldPhotoPath: string | null = null;
+    let oldPhotoUrl: string | null = null;
     if (user.role === 'ATHLETE' && user.athlete?.profilePicture) {
-      oldPhotoPath = path.join(__dirname, '../../', user.athlete.profilePicture);
+      oldPhotoUrl = user.athlete.profilePicture;
     } else if (user.role === 'COACH' && user.coach?.profilePicture) {
-      oldPhotoPath = path.join(__dirname, '../../', user.coach.profilePicture);
+      oldPhotoUrl = user.coach.profilePicture;
     }
 
     // Mettre à jour la base de données
@@ -97,10 +95,7 @@ export const uploadPhoto = async (req: AuthRequest, res: Response): Promise<Resp
       });
     }
 
-    // Supprimer l'ancienne photo après mise à jour réussie
-    if (oldPhotoPath && fs.existsSync(oldPhotoPath)) {
-      fs.unlinkSync(oldPhotoPath);
-    }
+    await deleteCloudinaryImageByUrl(oldPhotoUrl);
 
     res.json({ 
       message: 'Photo de profil mise à jour avec succès',
@@ -109,6 +104,10 @@ export const uploadPhoto = async (req: AuthRequest, res: Response): Promise<Resp
     });
   } catch (error) {
     console.error('Erreur lors de l\'upload de la photo:', error);
+    if (error instanceof Error && error.message.includes('Cloudinary non configuré')) {
+      res.status(503).json({ message: error.message });
+      return;
+    }
     res.status(500).json({ message: 'Erreur serveur' });
   }
 };
