@@ -41,6 +41,12 @@ Thumbs.db
 
 # Uploads (images, fichiers utilisateurs)
 uploads/
+!uploads/
+uploads/*
+!uploads/sessions/
+uploads/sessions/*
+!uploads/sessions/default-training.svg
+!uploads/sessions/default-match.svg
 temp/
 tmp/
 

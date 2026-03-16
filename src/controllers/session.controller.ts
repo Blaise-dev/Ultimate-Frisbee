@@ -1,7 +1,17 @@
 import { Request, Response } from 'express';
+import { SessionType } from '@prisma/client';
 import prisma from '../config/database';
 import path from 'path';
 import fs from 'fs';
+
+const getDefaultSessionImageUrlByType = (type: string) =>
+  `/uploads/sessions/default-${String(type || 'training').toLowerCase()}.svg`;
+
+const isDefaultSessionImage = (imageUrl?: string | null) =>
+  Boolean(imageUrl && imageUrl.includes('/uploads/sessions/default-'));
+
+const normalizeSessionType = (type?: string): SessionType =>
+  type === SessionType.MATCH ? SessionType.MATCH : SessionType.TRAINING;
 
 export const getAllSessions = async (req: Request, res: Response): Promise<void> => {
   try {
@@ -122,17 +132,20 @@ export const createSession = async (req: Request, res: Response): Promise<void> 
       athleteIds,
     } = req.body;
 
+    const resolvedType = normalizeSessionType(type);
+    const resolvedImageUrl = imageUrl || getDefaultSessionImageUrlByType(resolvedType);
+
     const session = await prisma.session.create({
       data: {
         title,
-        type,
+        type: resolvedType,
         coachId,
         sportId,
         startTime: new Date(startTime),
         endTime: new Date(endTime),
         location,
         description,
-        imageUrl,
+        imageUrl: resolvedImageUrl,
         isRecurrent,
         recurrence,
         athletes: athleteIds
@@ -176,16 +189,33 @@ export const updateSession = async (req: Request, res: Response): Promise<void> 
       recurrence,
     } = req.body;
 
+    const existingSession = await prisma.session.findUnique({
+      where: { id },
+      select: { type: true, imageUrl: true },
+    });
+
+    if (!existingSession) {
+      res.status(404).json({ error: 'Séance non trouvée' });
+      return;
+    }
+
+    const resolvedType = normalizeSessionType(type || existingSession.type);
+    const hasIncomingImage = typeof imageUrl === 'string' && imageUrl.trim().length > 0;
+
+    const resolvedImageUrl = hasIncomingImage
+      ? imageUrl
+      : existingSession.imageUrl || getDefaultSessionImageUrlByType(resolvedType);
+
     const session = await prisma.session.update({
       where: { id },
       data: {
         title,
-        type,
+        type: resolvedType,
         startTime: startTime ? new Date(startTime) : undefined,
         endTime: endTime ? new Date(endTime) : undefined,
         location,
         description,
-        imageUrl,
+        imageUrl: resolvedImageUrl,
         isRecurrent,
         recurrence,
       },
@@ -342,7 +372,7 @@ export const uploadSessionImage = async (req: Request, res: Response): Promise<v
     const imageUrl = `/uploads/sessions/${file.filename}`;
 
     // Supprimer l'ancienne image si elle existe
-    if (session.imageUrl) {
+    if (session.imageUrl && !isDefaultSessionImage(session.imageUrl)) {
       const oldImagePath = path.join(__dirname, '../../', session.imageUrl);
       if (fs.existsSync(oldImagePath)) {
         fs.unlinkSync(oldImagePath);
