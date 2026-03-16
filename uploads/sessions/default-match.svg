@@ -6,8 +6,9 @@
     </linearGradient>
   </defs>
   <rect width="1200" height="675" fill="url(#bg)"/>
-  <circle cx="280" cy="520" r="130" fill="#f472b6" opacity="0.25"/>
-  <circle cx="950" cy="170" r="95" fill="#e879f9" opacity="0.3"/>
-  <text x="60" y="345" fill="#ffffff" font-family="Arial, sans-serif" font-size="64" font-weight="700">Session Match</text>
-  <text x="60" y="400" fill="#fae8ff" font-family="Arial, sans-serif" font-size="32">Image par défaut</text>
+  <circle cx="240" cy="520" r="150" fill="#f472b6" opacity="0.16"/>
+  <circle cx="960" cy="140" r="120" fill="#e879f9" opacity="0.18"/>
+  <path d="M150 420 C270 300, 420 285, 560 365 S850 520, 1030 375" fill="none" stroke="#fce7f3" stroke-width="20" stroke-linecap="round" opacity="0.8"/>
+  <circle cx="610" cy="300" r="48" fill="none" stroke="#f9a8d4" stroke-width="14" opacity="0.85"/>
+  <path d="M585 300 h50" stroke="#f9a8d4" stroke-width="12" stroke-linecap="round" opacity="0.85"/>
 </svg>
